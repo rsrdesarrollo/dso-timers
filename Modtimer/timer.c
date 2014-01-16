@@ -7,6 +7,8 @@
 #include "cbuffer.h"
 #include "timer.h"
 
+#define MAX_SIZE_BUFF 100
+
 // Globales
 ////////////////////
 
@@ -51,11 +53,15 @@ int init_module(void){
     
     //TODO: init timer
     
+    cbuff = create_cbuffer_t(MAX_SIZE_BUFF);
+
     return 0;
 }
 void cleanup_module(void){
     remove_proc_entry(PROC_CFG, NULL);
     remove_proc_entry(PROC_RND, NULL);
+
+    destroy_cbuffer_t(cbuff);
 }
 
 
