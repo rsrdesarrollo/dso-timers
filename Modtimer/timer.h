@@ -28,6 +28,11 @@ MODULE_AUTHOR("R. Sampedro Ruiz");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Aproximación simplista al proceso de manejo" \
                     " de tramas por una interfaz de red");
+                    
+typedef struct {
+       unsigned char data;
+       struct list_head links;
+}list_item_t;
 
 /*
  * Prototipos de funciones
@@ -41,5 +46,5 @@ int proc_open_rnd (struct inode *, struct file *);
 int proc_close_rnd (struct inode *, struct file *);
 // Trabajos diferidos
 void timer_generate_rnd(unsigned long ); 	/* Top-half */
-void work_flush_cbuffer(struct work_struct *)	/* Buttom-half */
+void work_flush_cbuffer(struct work_struct *);	/* Buttom-half */
 
