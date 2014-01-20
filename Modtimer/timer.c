@@ -125,7 +125,7 @@ int proc_close_rnd (struct inode *inod, struct file *file){
 // Trabajos diferidos
 ///////////////////////////////////////
 void timer_generate_rnd(unsigned long data){ 		/* Top-half */
-    char rnd = (char) juffies;
+    char rnd = (char) jiffies;
     DBGV("Time event %hhX", rnd);
 
     // Inicio Sección crítica
