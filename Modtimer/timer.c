@@ -18,7 +18,7 @@ static struct file_operations proc_fops_rnd = {
     .release = proc_close_rnd
 };
 
-static struct workqueue_struct* my_wq;
+//static struct workqueue_struct* my_wq;
 static struct work_struct my_work;
 static cbuffer_t *cbuff;
 
@@ -28,17 +28,25 @@ static int time_period = HZ/2;
 static int emergency_th = 80;
 
 static char used = false;
+static char block = false;
+static char flushing = false;
 
 DEFINE_SPINLOCK(mutex);
+DEFINE_SEMAPHORE(mutex_list);
+struct semaphore cola;
 LIST_HEAD(mylist);
 
 struct proc_dir_entry *proc_cfg_entry, *proc_rnd_entry;
 
+void _unsafe_clear_list(struct list_head *list);
+void safe_clear_list(struct list_head *list);
 
 // Carga y descarga del módulo
 /////////////////////////////////////////
 int init_module(void){
     DBG("[modtimer] Creando entrada /proc/modconfig");
+    sema_init(cola, 0);
+
     proc_cfg_entry = create_proc_entry(PROC_CFG,0666,NULL);
     if(!proc_cfg_entry){
         DBG("[modtimer] ERROR al crear entrada /proc/modconfig");
@@ -94,8 +102,25 @@ int proc_write_cfg(struct file *file, const char __user *buff, unsigned long len
 // Callbacks Consumo de números 
 ///////////////////////////////////////
 ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t *offset){
+    int max_elem = len / 4, tot = 0;
+    LIST_HEAD(list_aux);
+    list_item_t *aux, *elem = NULL;
+    char entry[5];
 
-    return 0;
+    safemove_n(&mylist, max_elem, &list_aux); //Puede bloquear    
+    
+    list_for_each_entry_safe(elem, aux, &list_aux, links){
+        max_elem = snprintf(entry,5,"%hhu\n",elem->data);
+        list_del(&elem->links);
+        vfree(elem);
+        
+        copy_to_user(buff,elem,max_elem);
+
+        buff += max_elem;
+        tot += max_elem;
+    }
+
+    return tot;
 }
 
 int proc_open_rnd (struct inode *inod, struct file *file){
@@ -125,7 +150,10 @@ int proc_open_rnd (struct inode *inod, struct file *file){
 int proc_close_rnd (struct inode *inod, struct file *file){
 
     del_timer_sync(&timer);
+    flush_scheduld_work();
     // Clear all structures.
+    cbuffi->size = 0;
+    _unsafe_clear_list(&mylist); 
 
     used = false;
     module_put(THIS_MODULE);
@@ -140,10 +168,15 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
     DBGV("Time event %hhX", rnd);
 
     // Inicio Sección crítica
+    spin_lock(&mutex);
     insert_cbuffer_t(cbuff, rnd);
-    if((size_cbuffer_t(cbuff) * 100) / MAX_SIZE_BUFF > emergency_th){
+    if(((size_cbuffer_t(cbuff) * 100) / MAX_SIZE_BUFF > emergency_th) && !flushing){
         //Planificar flush
+        flushing = true;
+        INIT_WORK(&my_work, work_flush_cbuffer);
+        schedule_work(&my_work);
     }
+    spin_unclock(&mutex);
     //Fin sección critica
 
     timer.expires = jiffies + time_period;
@@ -151,9 +184,83 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
 
 }
 void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
+    unsigned long flags;
+    int nitems;
+    unsigned char items[MAX_SIZE_BUFF];
+    LIST_HEAD(list_aux);
     DBGV("Work event");
+    // Entra sección critica
+    spin_lock_irqsave(&mutex, flags);
+    nitems = remove_items_cbuffer_t(cbuff,(char *)items,MAX_SIZE_BUFF);
+    spin_unlock_irqrestore(&mutex, flags);
+    // Sal sección crítica
+
+    for(nitems; --nitems > 0;){
+        struct list_item_t *a = vmalloc(sizeof(struct list_item_t));
+        a->data = items[nitems];
+        list_add(&a->links, &list_aux);
+    }
+
+    //inicio sección crítica
+    down(&mutex_list);
+    list_splice_tail(&list_aux, &mylist);
+    up(&mutex_list);
+    //fin sección crítica
+
+    flushing = false;
+
+    if(block){
+        block = false;
+        up(&cola);
+    }
 }
 
 
+// Funciones auxiliares
+/////////////////////////////////
 
+void _unsafe_clear_list(struct list_head *list){
+    list_item_t *aux, *elem = NULL;
 
+    list_for_each_entry_safe(elem, aux, list, links){
+        list_del(&(elem->links));
+        vfree(elem);
+    }
+
+}
+
+int safemove_n(struct list_head *origin, int n, struct list_head *dest){
+
+    list_item_t *aux, *elem = NULL;
+    int i = 0;
+
+    DBGV("[Modtimer] Move n to list.");
+
+    do{
+        // Entra en la sección crítica
+        if(down_interruptible(&mutex_list))
+            return 0; 
+        
+        list_for_each_entry_safe(elem, aux, origin, links){
+            if(++i > n){
+                --i;
+                break;
+            }
+            list_move(&(elem->links), dest);
+        }
+
+        if(!i){
+            block = true;
+            up(&mutex_list);   
+            if(down_interruptible(&cola)){
+                block = false; 
+                return 0;
+            }
+        }
+
+    }while(!i);
+
+    up(&mutex_list); // Sale de la sección critica
+
+    return i;
+}

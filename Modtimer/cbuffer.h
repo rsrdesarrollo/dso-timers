@@ -40,7 +40,7 @@ void insert_items_cbuffer_t ( cbuffer_t* cbuffer, const char* items, int nr_item
 char remove_cbuffer_t ( cbuffer_t* cbuffer);
 
 /* Removes nr_items from the buffer and returns a copy of them */
-void remove_items_cbuffer_t ( cbuffer_t* cbuffer, char* items, int nr_items);
+int remove_items_cbuffer_t ( cbuffer_t* cbuffer, char* items, int nr_items);
 
 /* Returns a pointer to the first element in the buffer */
 char* head_cbuffer_t ( cbuffer_t* cbuffer );

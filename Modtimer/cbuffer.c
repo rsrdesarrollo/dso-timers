@@ -149,21 +149,18 @@ void insert_items_cbuffer_t ( cbuffer_t* cbuffer, const char* items, int nr_item
 }
 
 /* Removes nr_items from the buffer and returns a copy of them */
-void remove_items_cbuffer_t ( cbuffer_t* cbuffer, char* items, int nr_items)
+int remove_items_cbuffer_t ( cbuffer_t* cbuffer, char* items, int nr_items)
 {
-	int nr_items_left=nr_items;
+	int nr_items_left=min(nr_items,cbuffer->size);
 	int items_copied;
-	
-	/* Restriction: nr_items can't be greater than the buffer size (Ignore)) */
-	if (nr_items>cbuffer->size)
-		return;	
+    nr_items = nr_items_left;
 	
 	/* Check if we can't store all items at the end of the buffer */
 	if (cbuffer->head+nr_items_left > cbuffer->max_size)
 	{
 		items_copied=cbuffer->max_size-cbuffer->head;
 		memcpy(items,&cbuffer->data[cbuffer->head],items_copied);
-		nr_items_left-=items_copied;
+        nr_items_left-=items_copied;
 		items+=items_copied; //Move the pointer forward
 		cbuffer->head=0;		
 	}
@@ -178,6 +175,8 @@ void remove_items_cbuffer_t ( cbuffer_t* cbuffer, char* items, int nr_items)
 	
 	/* Update size */
 	cbuffer->size-=nr_items;
+
+    return nr_items;
 }
 
 
