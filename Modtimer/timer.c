@@ -39,7 +39,7 @@ LIST_HEAD(mylist);
 struct proc_dir_entry *proc_cfg_entry, *proc_rnd_entry;
 
 void _unsafe_clear_list(struct list_head *list);
-void safemove_n(struct list_head *src, int n, struct list_head *dst);
+int safemove_n(struct list_head *src, int n, struct list_head *dst);
 
 // Carga y descarga del módulo
 /////////////////////////////////////////
@@ -150,9 +150,9 @@ int proc_open_rnd (struct inode *inod, struct file *file){
 int proc_close_rnd (struct inode *inod, struct file *file){
 
     del_timer_sync(&timer);
-    flush_scheduld_work();
+    flush_scheduled_work();
     // Clear all structures.
-    cbuffi->size = 0;
+    cbuff->size = 0;
     _unsafe_clear_list(&mylist); 
 
     used = false;
@@ -176,7 +176,7 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
         INIT_WORK(&my_work, work_flush_cbuffer);
         schedule_work(&my_work);
     }
-    spin_unclock(&mutex);
+    spin_unlock(&mutex);
     //Fin sección critica
 
     timer.expires = jiffies + time_period;
@@ -196,7 +196,7 @@ void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     // Sal sección crítica
 
     for(nitems; --nitems > 0;){
-        struct list_item_t *a = vmalloc(sizeof(struct list_item_t));
+        list_item_t *a = vmalloc(sizeof(list_item_t));
         a->data = items[nitems];
         list_add(&a->links, &list_aux);
     }
