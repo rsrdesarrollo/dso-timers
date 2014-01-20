@@ -87,6 +87,11 @@ int proc_read_cfg(char *buff, char **buff_loc, off_t offset, int len, int *eof, 
 int proc_write_cfg(struct file *file, const char __user *buff, unsigned long len, void *data){
     char *kbuff = vmalloc(len);
     int value;
+    DBGV("[modcfg] read config %d buff"; len);
+
+    if(!kbuff)
+        return -ENOSPC;
+
     copy_from_user(kbuff, buff, len);
 
     if(sscanf(kbuff, "time_period %d", &value)){
