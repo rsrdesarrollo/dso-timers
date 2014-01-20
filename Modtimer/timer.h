@@ -38,7 +38,7 @@ typedef struct {
  * Prototipos de funciones
  */
 // Callbacks Configuración del módulo
-,elem->int proc_read_cfg(char *, char **, off_t, int, int *, void *);
+int proc_read_cfg(char *, char **, off_t, int, int *, void *);
 int proc_write_cfg(struct file *, const char __user *, unsigned long, void *);
 // Callbacks Consumo de números 
 ssize_t proc_read_rnd (struct file *, char __user *, size_t, loff_t *);
