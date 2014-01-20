@@ -135,7 +135,7 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
     }
     //Fin sección critica
 
-    timer.expires = juffies + time_period;
+    timer.expires = jiffies + time_period;
     add_timer(&timer);
 
 }
