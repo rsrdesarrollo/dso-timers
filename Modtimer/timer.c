@@ -7,7 +7,7 @@
 #include "cbuffer.h"
 #include "timer.h"
 
-#define MAX_SIZE_BUFF 100
+#define MAX_SIZE_BUFF 100u
 
 // Globales
 ////////////////////
