@@ -49,7 +49,7 @@ int init_module(void){
     proc_cfg_entry->write_proc = proc_write_cfg;
 
     DBG("[modtimer] Creando entrada /proc/modtimer");
-    proc_rnd_entry = create_proc_entry(PROC_RND,0666,NULL);
+    proc_rnd_entry = create_proc_entry(PROC_RND,0444,NULL);
     if(!proc_rnd_entry){
         DBG("[modtimer] ERROR al crear entrada /proc/modtimer");
         remove_proc_entry(PROC_CFG, NULL);
@@ -74,9 +74,19 @@ void cleanup_module(void){
 ///////////////////////////////////////
 int proc_read_cfg(char *buff, char **buff_loc, off_t offset, int len, int *eof, void *data){
 
-    return snprintf(buff, len,"time_period = %d\nemergency_th = %d", time_period, emergency_th);
+    return snprintf(buff, len,"time_period = %d\nemergency_th = %d\n", time_period, emergency_th);
 }
 int proc_write_cfg(struct file *file, const char __user *buff, unsigned long len, void *data){
+    char *kbuff = vmalloc(len);
+    int value;
+    copy_from_user(kbuff, buff, len);
+
+    if(sscanf(kbuff, "time_period %d", &value)){
+        time_period = value;
+    }else if(sscanf(kbuff, "emergency_th %d", &value)){
+        emergency_th = value;
+    }else
+        return -EINVAL;
 
     return 0;
 }
@@ -93,6 +103,7 @@ int proc_open_rnd (struct inode *inod, struct file *file){
     // Inicio sección crítica
     spin_lock(&mutex);
     if(used) {
+        DBG("[modtimer] ERROR: no puede haber 2 lectores");
         return -EPERM;
     }
 
