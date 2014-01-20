@@ -41,21 +41,21 @@ int init_module(void){
     DBG("[modtimer] Creando entrada /proc/modconfig");
     proc_cfg_entry = create_proc_entry(PROC_CFG,0666,NULL);
     if(!proc_cfg_entry){
-	DBG("[modtimer] ERROR al crear entrada /proc/modconfig")
-    	return -ENOMEM;
+        DBG("[modtimer] ERROR al crear entrada /proc/modconfig");
+        return -ENOMEM;
     }
-    
+
     proc_cfg_entry->read_proc = proc_read_cfg;
     proc_cfg_entry->write_proc = proc_write_cfg;
-    
+
     DBG("[modtimer] Creando entrada /proc/modtimer");
     proc_rnd_entry = create_proc_entry(PROC_RND,0666,NULL);
     if(!proc_rnd_entry){
-	DBG("[modtimer] ERROR al crear entrada /proc/modtimer")
+        DBG("[modtimer] ERROR al crear entrada /proc/modtimer");
         remove_proc_entry(PROC_CFG, NULL);
         return -ENOMEM;
     }
-    
+
     proc_rnd_entry->proc_fops = &proc_fops_rnd;
 
     cbuff = create_cbuffer_t(MAX_SIZE_BUFF);
@@ -89,23 +89,23 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
 }
 
 int proc_open_rnd (struct inode *inod, struct file *file){
-    
+
     // Inicio sección crítica
     spin_lock(&mutex);
     if(used) {
         return -ENOPERM;
     }
-    
+
     used = true;
     spin_unlock(&mutex);
     // Fin sección crítica
-    
+
     init_timer(&timer);
     timer.expires = juffies + time_period;
     timer.data = 0;
     timer.function = timer_generate_rnd;
     add_timer(&timer);
-    
+
     try_module_get(THIS_MODUEL);
 
     return 0;
@@ -115,10 +115,10 @@ int proc_close_rnd (struct inode *inod, struct file *file){
 
     del_timer_sync(&timer);
     // Clear all structures.
-    
+
     used = false;
     module_put(THIS_MODUEL);
-    
+
     return 0;
 }
 
@@ -134,10 +134,10 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
         //Planificar flush
     }
     //Fin sección critica
-    
+
     timer.expires = juffies + time_period;
     add_timer(&timer);
-    
+
 }
 void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     DBGV("Work event");
