@@ -39,13 +39,13 @@ LIST_HEAD(mylist);
 struct proc_dir_entry *proc_cfg_entry, *proc_rnd_entry;
 
 void _unsafe_clear_list(struct list_head *list);
-void safe_clear_list(struct list_head *list);
+void safemove_n(struct list_head *src, int n, struct list_head *dst);
 
 // Carga y descarga del módulo
 /////////////////////////////////////////
 int init_module(void){
     DBG("[modtimer] Creando entrada /proc/modconfig");
-    sema_init(cola, 0);
+    sema_init(&cola, 0);
 
     proc_cfg_entry = create_proc_entry(PROC_CFG,0666,NULL);
     if(!proc_cfg_entry){
