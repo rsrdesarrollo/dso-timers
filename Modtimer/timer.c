@@ -22,7 +22,7 @@ static struct workqueue_struct* my_wq;
 static struct work_struct my_work;
 static cbuffer_t *cbuff;
 
-static struct timer_list timner;
+static struct timer_list timer;
 
 static int time_period = HZ/2;
 static int emergency_th = 80;
@@ -93,7 +93,7 @@ int proc_open_rnd (struct inode *inod, struct file *file){
     // Inicio sección crítica
     spin_lock(&mutex);
     if(used) {
-        return -ENOPERM;
+        return -EPERM;
     }
 
     used = true;
@@ -101,12 +101,12 @@ int proc_open_rnd (struct inode *inod, struct file *file){
     // Fin sección crítica
 
     init_timer(&timer);
-    timer.expires = juffies + time_period;
+    timer.expires = jiffies + time_period;
     timer.data = 0;
     timer.function = timer_generate_rnd;
     add_timer(&timer);
 
-    try_module_get(THIS_MODUEL);
+    try_module_get(THIS_MODULE);
 
     return 0;
 }
@@ -117,7 +117,7 @@ int proc_close_rnd (struct inode *inod, struct file *file){
     // Clear all structures.
 
     used = false;
-    module_put(THIS_MODUEL);
+    module_put(THIS_MODULE);
 
     return 0;
 }
