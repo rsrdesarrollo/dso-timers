@@ -98,10 +98,13 @@ int proc_write_cfg(struct file *file, const char __user *buff, unsigned long len
         time_period = value;
     }else if(sscanf(kbuff, "emergency_th %d", &value)){
         emergency_th = value;
-    }else
+    }else{
+        vfree(kbuff);
         return -EINVAL;
-
-    return 0;
+    }
+    
+    vfree(kbuff);
+    return len;
 }
 
 // Callbacks Consumo de números 
