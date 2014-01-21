@@ -122,7 +122,7 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
         list_del(&elem->links);
         vfree(elem);
         
-        copy_to_user(buff,elem,max_elem);
+        copy_to_user(buff,entry,max_elem);
 
         buff += max_elem;
         tot += max_elem;
