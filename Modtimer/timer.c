@@ -67,6 +67,8 @@ int init_module(void){
     proc_rnd_entry->proc_fops = &proc_fops_rnd;
 
     cbuff = create_cbuffer_t(MAX_SIZE_BUFF);
+    
+    INIT_WORK(&my_work, work_flush_cbuffer);
 
     return 0;
 }
@@ -181,7 +183,6 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
     if(((size_cbuffer_t(cbuff) * 100) / MAX_SIZE_BUFF > emergency_th) && !flushing){
         //Planificar flush
         flushing = true;
-        INIT_WORK(&my_work, work_flush_cbuffer);
         schedule_work(&my_work);
     }
     spin_unlock(&mutex);
@@ -212,15 +213,19 @@ void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     //inicio sección crítica
     down(&mutex_list);
     list_splice_tail(&list_aux, &mylist);
-    up(&mutex_list);
-    //fin sección crítica
-
-    flushing = false;
-
+    
     if(block){
         block = false;
         up(&cola);
     }
+    up(&mutex_list);
+    //fin sección crítica
+    
+    // Entra sección critica
+    spin_lock_irqsave(&mutex, flags);
+    flushing = false;
+    spin_unlock_irqrestore(&mutex, flags);
+    // Sal sección crítica
 }
 
 
