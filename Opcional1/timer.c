@@ -133,6 +133,7 @@ int proc_open_rnd (struct inode *inod, struct file *file){
     // Inicio sección crítica
     spin_lock(&mutex);
     if(used) {
+        spin_unlock(&mutex);
         DBG("[modtimer] ERROR: no puede haber 2 lectores");
         return -EPERM;
     }

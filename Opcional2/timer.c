@@ -12,6 +12,11 @@
 // Globales
 ////////////////////
 
+#define EMPTY 0
+#define ODD 0x02
+#define EVEN 0x01
+
+
 static struct file_operations proc_fops_rnd = {
     .read = proc_read_rnd,
     .open = proc_open_rnd,
@@ -27,14 +32,15 @@ static struct timer_list timer;
 static int time_period = HZ/2;
 static int emergency_th = 80;
 
-static char used = false;
+static char state = 0;
 static char block = false;
 static char flushing = false;
 
 DEFINE_SPINLOCK(mutex);
 DEFINE_SEMAPHORE(mutex_list);
 struct semaphore cola;
-LIST_HEAD(mylist);
+LIST_HEAD(oddlist);
+LIST_HEAD(evenlist);
 
 struct proc_dir_entry *proc_cfg_entry, *proc_rnd_entry;
 
@@ -69,6 +75,7 @@ int init_module(void){
     cbuff = create_cbuffer_t(MAX_SIZE_BUFF);
     
     INIT_WORK(&my_work, work_flush_cbuffer);
+    init_timer(&timer);
 
     return 0;
 }
@@ -117,8 +124,11 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
     list_item_t *aux, *elem = NULL;
     char entry[5];
 
-    safemove_n(&mylist, max_elem, &list_aux); //Puede bloquear    
-    
+    if(*((int *)file->private_data) == ODD)
+        safemove_n(&oddlist, max_elem, &list_aux); //Puede bloquear
+    else
+        safemove_n(&evenlist, max_elem, &list_aux); //Puede bloquear
+
     list_for_each_entry_safe(elem, aux, &list_aux, links){
         max_elem = snprintf(entry,5,"%hhu\n",elem->data);
         list_del(&elem->links);
@@ -134,23 +144,29 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
 }
 
 int proc_open_rnd (struct inode *inod, struct file *file){
-
+    unsigned long flags;
     // Inicio sección crítica
-    spin_lock(&mutex);
-    if(used) {
-        DBG("[modtimer] ERROR: no puede haber 2 lectores");
+    spin_lock_irqsave(&mutex, flags);
+    if(state == ODD | EVEN) {
+        spin_unlock_irqrestore(&mutex, flags);
+        DBG("[modtimer] ERROR: no puede haber más de 2 lectores");
         return -EPERM;
     }
 
-    used = true;
-    spin_unlock(&mutex);
+    if(state & ODD){
+        // Ya estaba el primero
+        timer.expires = jiffies + time_period;
+        timer.data = 0;
+        timer.function = timer_generate_rnd;
+        add_timer(&timer);
+
+        state |= EVEN;
+    }else
+        state |= ODD;
+
+    spin_unlock_irqrestore(&mutex, flags);
     // Fin sección crítica
 
-    init_timer(&timer);
-    timer.expires = jiffies + time_period;
-    timer.data = 0;
-    timer.function = timer_generate_rnd;
-    add_timer(&timer);
 
     try_module_get(THIS_MODULE);
 
