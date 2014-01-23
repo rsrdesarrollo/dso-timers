@@ -67,8 +67,8 @@ int init_module(void){
     proc_rnd_entry->proc_fops = &proc_fops_rnd;
 
     cbuff = create_cbuffer_t(MAX_SIZE_BUFF);
-    
     INIT_WORK(&my_work, work_flush_cbuffer);
+    init_timer(&timer);
 
     return 0;
 }
@@ -112,25 +112,20 @@ int proc_write_cfg(struct file *file, const char __user *buff, unsigned long len
 // Callbacks Consumo de números 
 ///////////////////////////////////////
 ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t *offset){
-    int max_elem = len / 4, tot = 0;
+
     LIST_HEAD(list_aux);
     list_item_t *aux, *elem = NULL;
-    char entry[5];
 
-    safemove_n(&mylist, max_elem, &list_aux); //Puede bloquear    
+    int used = safemove_n(&mylist, len, &list_aux); //Puede bloquear    
     
     list_for_each_entry_safe(elem, aux, &list_aux, links){
-        max_elem = snprintf(entry,5,"%hhu\n",elem->data);
+        used -= copy_to_user(buff++, &elem->data, 1);
+        
         list_del(&elem->links);
         vfree(elem);
-        
-        copy_to_user(buff,entry,max_elem);
-
-        buff += max_elem;
-        tot += max_elem;
     }
 
-    return tot;
+    return used;
 }
 
 int proc_open_rnd (struct inode *inod, struct file *file){
@@ -146,7 +141,6 @@ int proc_open_rnd (struct inode *inod, struct file *file){
     spin_unlock(&mutex);
     // Fin sección crítica
 
-    init_timer(&timer);
     timer.expires = jiffies + time_period;
     timer.data = 0;
     timer.function = timer_generate_rnd;
