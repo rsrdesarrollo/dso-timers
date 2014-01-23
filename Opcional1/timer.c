@@ -31,7 +31,7 @@ static char used = false;
 static char block = false;
 static char flushing = false;
 
-DEFINE_SPINLOCK(mutex);
+DEFINE_SPINLOCK(mutex_cbuff);
 DEFINE_SEMAPHORE(mutex_list);
 struct semaphore cola;
 LIST_HEAD(mylist);
@@ -131,15 +131,15 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
 int proc_open_rnd (struct inode *inod, struct file *file){
 
     // Inicio sección crítica
-    spin_lock(&mutex);
+    down(&mutex_list);
     if(used) {
-        spin_unlock(&mutex);
+        up(&mutex_list);
         DBG("[modtimer] ERROR: no puede haber 2 lectores");
         return -EPERM;
     }
 
     used = true;
-    spin_unlock(&mutex);
+    up(&mutex_list);
     // Fin sección crítica
 
     timer.expires = jiffies + time_period;
@@ -173,14 +173,14 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
     DBGV("Time event %hhX", rnd);
 
     // Inicio Sección crítica
-    spin_lock(&mutex);
+    spin_lock(&mutex_cbuff);
     insert_cbuffer_t(cbuff, rnd);
     if(((size_cbuffer_t(cbuff) * 100) / MAX_SIZE_BUFF > emergency_th) && !flushing){
         //Planificar flush
         flushing = true;
         schedule_work(&my_work);
     }
-    spin_unlock(&mutex);
+    spin_unlock(&mutex_cbuff);
     //Fin sección critica
 
     timer.expires = jiffies + time_period;
@@ -194,9 +194,9 @@ void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     LIST_HEAD(list_aux);
     DBGV("Work event");
     // Entra sección critica
-    spin_lock_irqsave(&mutex, flags);
+    spin_lock_irqsave(&mutex_cbuff, flags);
     nitems = remove_items_cbuffer_t(cbuff,(char *)items,MAX_SIZE_BUFF);
-    spin_unlock_irqrestore(&mutex, flags);
+    spin_unlock_irqrestore(&mutex_cbuff, flags);
     // Sal sección crítica
 
     for(nitems; --nitems > 0;){

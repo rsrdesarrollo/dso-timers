@@ -12,10 +12,11 @@
 // Globales
 ////////////////////
 
-#define EMPTY 0
+#define IS_EMPTY(a) a==0
+#define IS_FULL(a) a==0x03
 #define ODD 0x02
 #define EVEN 0x01
-
+#define NOT_IN(a) a ^ 0x03
 
 static struct file_operations proc_fops_rnd = {
     .read = proc_read_rnd,
@@ -32,7 +33,7 @@ static struct timer_list timer;
 static int time_period = HZ/2;
 static int emergency_th = 80;
 
-static char state = 0;
+static char state = EMPTY;
 static char block = false;
 static char flushing = false;
 
@@ -144,27 +145,29 @@ ssize_t proc_read_rnd (struct file *file, char __user *buff, size_t len, loff_t 
 }
 
 int proc_open_rnd (struct inode *inod, struct file *file){
-    unsigned long flags;
+    char *type = vmalloc(1);
     // Inicio sección crítica
-    spin_lock_irqsave(&mutex, flags);
-    if(state == ODD | EVEN) {
-        spin_unlock_irqrestore(&mutex, flags);
+    down(&mutex_list);
+    if(IS_FULL(state)) {
+        up(&mutex_list);
         DBG("[modtimer] ERROR: no puede haber más de 2 lectores");
+        vfree(type);
         return -EPERM;
     }
 
-    if(state & ODD){
-        // Ya estaba el primero
+    *type = (IS_EMPTY(state)? ODD : NOT_IN(state));
+        
+    state |= *type;
+    file->private_data = type;
+    
+    if(IS_FULL(state)){    
         timer.expires = jiffies + time_period;
         timer.data = 0;
         timer.function = timer_generate_rnd;
         add_timer(&timer);
+    }
 
-        state |= EVEN;
-    }else
-        state |= ODD;
-
-    spin_unlock_irqrestore(&mutex, flags);
+    up(&mutex_list);
     // Fin sección crítica
 
 
@@ -175,8 +178,17 @@ int proc_open_rnd (struct inode *inod, struct file *file){
 
 int proc_close_rnd (struct inode *inod, struct file *file){
 
-    del_timer_sync(&timer);
-    flush_scheduled_work();
+    down(&mutex_list);
+    if(IS_FULL(state)){
+        state ^= *(char *)file->private_data;
+        up(&mutex_list);
+
+        del_timer_sync(&timer);
+        flush_scheduled_work();
+        
+    }else
+        up(&mutex_list);
+
     // Clear all structures.
     cbuff->size = 0;
     _unsafe_clear_list(&mylist); 
