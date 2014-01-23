@@ -33,7 +33,7 @@ static struct timer_list timer;
 static int time_period = HZ/2;
 static int emergency_th = 80;
 
-static char state = EMPTY;
+static char state = 0;
 static char block = false;
 static char flushing = false;
 
