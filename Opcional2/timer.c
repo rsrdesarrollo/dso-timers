@@ -37,7 +37,7 @@ static char state = EMPTY;
 static char block = false;
 static char flushing = false;
 
-DEFINE_SPINLOCK(mutex);
+DEFINE_SPINLOCK(mutex_cbuff);
 DEFINE_SEMAPHORE(mutex_list);
 struct semaphore cola;
 LIST_HEAD(oddlist);
@@ -177,23 +177,28 @@ int proc_open_rnd (struct inode *inod, struct file *file){
 }
 
 int proc_close_rnd (struct inode *inod, struct file *file){
+    struct list_head *subject;
+
+    subject = ((*(char *)file->private_data == ODD)?&oddlist:&evenlist);
 
     down(&mutex_list);
     if(IS_FULL(state)){
-        state ^= *(char *)file->private_data;
         up(&mutex_list);
-
+        // Sale el primero
         del_timer_sync(&timer);
         flush_scheduled_work();
         
+        cbuff->size = 0;
+
     }else
         up(&mutex_list);
+    
+    _unsafe_clear_list(subject);
 
-    // Clear all structures.
-    cbuff->size = 0;
-    _unsafe_clear_list(&mylist); 
+    down(&mutex_list);
+    state ^= *(char *)file->private_data;
+    up(&mutex_list);
 
-    used = false;
     module_put(THIS_MODULE);
 
     return 0;
@@ -206,14 +211,14 @@ void timer_generate_rnd(unsigned long data){ 		/* Top-half */
     DBGV("Time event %hhX", rnd);
 
     // Inicio Sección crítica
-    spin_lock(&mutex);
+    spin_lock(&mutex_cbuff);
     insert_cbuffer_t(cbuff, rnd);
     if(((size_cbuffer_t(cbuff) * 100) / MAX_SIZE_BUFF > emergency_th) && !flushing){
         //Planificar flush
         flushing = true;
         schedule_work(&my_work);
     }
-    spin_unlock(&mutex);
+    spin_unlock(&mutex_cbuff);
     //Fin sección critica
 
     timer.expires = jiffies + time_period;
@@ -224,35 +229,42 @@ void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     unsigned long flags;
     int nitems;
     unsigned char items[MAX_SIZE_BUFF];
-    LIST_HEAD(list_aux);
+    LIST_HEAD(odd_aux);
+    LIST_HEAD(even_aux);
     DBGV("Work event");
     // Entra sección critica
-    spin_lock_irqsave(&mutex, flags);
+    spin_lock_irqsave(&mutex_cbuff, flags);
     nitems = remove_items_cbuffer_t(cbuff,(char *)items,MAX_SIZE_BUFF);
-    spin_unlock_irqrestore(&mutex, flags);
+    spin_unlock_irqrestore(&mutex_cbuff, flags);
     // Sal sección crítica
 
     for(nitems; --nitems > 0;){
         list_item_t *a = vmalloc(sizeof(list_item_t));
         a->data = items[nitems];
-        list_add(&a->links, &list_aux);
+        if(a->data % 2 == 0)
+            list_add(&a->links, &even_aux);
+        else
+            list_add(&a->links, &odd_aux);
     }
 
     //inicio sección crítica
     down(&mutex_list);
-    list_splice_tail(&list_aux, &mylist);
+    list_splice_tail(&even_aux, &evenlist);
+    list_splice_tail(&odd_aux, &oddlist);
     
     if(block){
         block = false;
+        // Si despertamos de más da igual por el while
+        up(&cola);
         up(&cola);
     }
     up(&mutex_list);
     //fin sección crítica
     
     // Entra sección critica
-    spin_lock_irqsave(&mutex, flags);
+    spin_lock_irqsave(&mutex_cbuff, flags);
     flushing = false;
-    spin_unlock_irqrestore(&mutex, flags);
+    spin_unlock_irqrestore(&mutex_cbuff, flags);
     // Sal sección crítica
 }
 
