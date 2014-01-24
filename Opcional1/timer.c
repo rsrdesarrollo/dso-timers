@@ -7,7 +7,7 @@
 #include "cbuffer.h"
 #include "timer.h"
 
-#define MAX_SIZE_BUFF 100u
+#define MAX_SIZE_BUFF 10u
 
 // Globales
 ////////////////////
@@ -217,9 +217,9 @@ void work_flush_cbuffer(struct work_struct *work){	/* Buttom-half */
     //fin sección crítica
     
     // Entra sección critica
-    spin_lock_irqsave(&mutex, flags);
+    spin_lock_irqsave(&mutex_cbuff, flags);
     flushing = false;
-    spin_unlock_irqrestore(&mutex, flags);
+    spin_unlock_irqrestore(&mutex_cbuff, flags);
     // Sal sección crítica
 }
 
